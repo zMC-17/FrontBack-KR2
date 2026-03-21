@@ -1,6 +1,8 @@
 
 const express = require('express')
 const router = express.Router()
+const { nanoid } = require("nanoid");
+const jwt = require("jsonwebtoken")
 const { findUserOr404,
     findProductOr404,
     hashPassword,
@@ -9,7 +11,10 @@ const { findUserOr404,
     products,
     findProductIndexOr404
 } = require('./utils');
-const { nanoid } = require("nanoid");
+const { authMiddleware } = require("./middleware")
+
+const JWT_SECRET = "jwt-secret"
+const ACCESS_EXPIRES_IN = '15m'
 
 
 // --- ПОЛЬЗОВАТЕЛЬ ---
@@ -40,14 +45,42 @@ router.post("/auth/login", async (req, res) => {
     }
     const user = findUserOr404(username, res);
     if (!user) return;
-    isAuthentethicated = await verifyPassword(password,
+
+    const isAuthenticated = await verifyPassword(password,
         user.hashedPassword);
-    if (isAuthentethicated) {
-        res.status(200).json({ login: true });
+    if (isAuthenticated) {
+        // JWT
+        const access_token = jwt.sign(
+            {
+                sub: user.id,
+                username: user.username
+            },
+            JWT_SECRET,
+            {
+                expiresIn: ACCESS_EXPIRES_IN,
+            }
+        );
+        res.status(200).json({ access_token });
     }
     else {
         res.status(401).json({ error: "not authentethicated" })
     }
+});
+
+router.get("/api/auth/me", authMiddleware, (req, res) => {
+    // sub мы положили в токен при login
+    const userId = req.user.sub;
+    const user = users.find(u => u.id === userId);
+    if (!user) {
+        return res.status(404).json({
+            error: "User not found",
+        });
+    }
+    // никогда не возвращаем passwordHash
+    res.json({
+        id: user.id,
+        username: user.username,
+    });
 });
 
 // --- ТОВАРЫ ---
@@ -64,7 +97,8 @@ router.post("/products", (req, res) => {
     res.status(201).json(newProduct);
 });
 
-router.get("/products", (req, res) => {
+router.get("/products", authMiddleware, (req, res) => {
+
     res.json(products);
 });
 
@@ -75,7 +109,7 @@ router.get("/products/:id", (req, res) => {
     res.json(product);
 });
 
-router.put("/products/:id", (req, res) => {
+router.put("/products/:id", authMiddleware, (req, res) => {
     const id = req.params.id;
     const { title, category, description, price } = req.body;
 
@@ -99,7 +133,7 @@ router.put("/products/:id", (req, res) => {
 
 });
 
-router.delete("/products/:id", (req, res) => {
+router.delete("/products/:id", authMiddleware, (req, res) => {
     const id = req.params.id;
     const product = findProductOr404(id, res)
     if (!product) return
