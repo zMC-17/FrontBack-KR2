@@ -1,0 +1,373 @@
+openapi: 3.0.0
+info:
+  title: My API
+  version: 1.0.0
+  description: API для управления пользователями и товарами
+  contact:
+    name: Support
+    email: support@example.com
+
+servers:
+  - url: http://localhost:3000
+    description: Development server
+
+tags:
+  - name: Auth
+    description: Аутентификация и регистрация пользователей
+  - name: Products
+    description: Управление товарами
+
+components:
+  schemas:
+    # Схема пользователя (регистрация)
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "abc123"
+          description: Уникальный ID пользователя
+        email:
+          type: string
+          format: email
+          example: "user@example.com"
+          description: Email пользователя
+        first_name:
+          type: string
+          example: "Иван"
+          description: Имя пользователя
+        last_name:
+          type: string
+          example: "Иванов"
+          description: Фамилия пользователя
+        hashedPassword:
+          type: string
+          example: "$2b$10$..."
+          description: Хешированный пароль (не возвращается в ответе)
+
+    # Схема для регистрации (входные данные)
+    RegisterInput:
+      type: object
+      required:
+        - email
+        - first_name
+        - last_name
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          example: "user@example.com"
+          description: Email пользователя
+        first_name:
+          type: string
+          example: "Иван"
+          description: Имя пользователя
+        last_name:
+          type: string
+          example: "Иванов"
+          description: Фамилия пользователя
+        password:
+          type: string
+          format: password
+          example: "qwerty123"
+          description: Пароль пользователя
+      example:
+        email: "user@example.com"
+        first_name: "Иван"
+        last_name: "Иванов"
+        password: "qwerty123"
+
+    # Схема для входа
+    LoginInput:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+          example: "user@example.com"
+          description: Имя пользователя (email)
+        password:
+          type: string
+          format: password
+          example: "qwerty123"
+          description: Пароль пользователя
+      example:
+        username: "user@example.com"
+        password: "qwerty123"
+
+    # Схема успешного входа
+    LoginResponse:
+      type: object
+      properties:
+        login:
+          type: boolean
+          example: true
+          description: Статус аутентификации
+
+    # Схема товара
+    Product:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "xyz789"
+          description: Уникальный ID товара
+        title:
+          type: string
+          example: "Ноутбук"
+          description: Название товара
+        category:
+          type: string
+          example: "Электроника"
+          description: Категория товара
+        description:
+          type: string
+          example: "Мощный ноутбук для работы и игр"
+          description: Описание товара
+        price:
+          type: number
+          example: 50000
+          description: Цена товара
+      example:
+        id: "xyz789"
+        title: "Ноутбук"
+        category: "Электроника"
+        description: "Мощный ноутбук для работы и игр"
+        price: 50000
+
+    # Схема для создания/обновления товара (входные данные)
+    ProductInput:
+      type: object
+      required:
+        - title
+        - price
+      properties:
+        title:
+          type: string
+          example: "Ноутбук"
+          description: Название товара
+        category:
+          type: string
+          example: "Электроника"
+          description: Категория товара
+        description:
+          type: string
+          example: "Мощный ноутбук для работы и игр"
+          description: Описание товара
+        price:
+          type: number
+          example: 50000
+          description: Цена товара
+      example:
+        title: "Ноутбук"
+        category: "Электроника"
+        description: "Мощный ноутбук для работы и игр"
+        price: 50000
+
+    # Схема ошибки
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Сообщение об ошибке
+      example:
+        error: "Not found"
+
+paths:
+  # --- АУТЕНТИФИКАЦИЯ ---
+  /api/auth/register:
+    post:
+      tags:
+        - Auth
+      summary: Регистрация нового пользователя
+      description: Создает нового пользователя с переданными данными
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterInput"
+      responses:
+        201:
+          description: Пользователь успешно создан
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        400:
+          description: Не все обязательные поля заполнены
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/auth/login:
+    post:
+      tags:
+        - Auth
+      summary: Вход в систему
+      description: Аутентификация пользователя по username и password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginInput"
+      responses:
+        200:
+          description: Успешная аутентификация
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        400:
+          description: Не указаны username или password
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        401:
+          description: Неверный пароль
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        404:
+          description: Пользователь не найден
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # --- ТОВАРЫ ---
+  /api/products:
+    get:
+      tags:
+        - Products
+      summary: Получить список всех товаров
+      description: Возвращает массив всех товаров
+      responses:
+        200:
+          description: Успешный ответ
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Product"
+
+    post:
+      tags:
+        - Products
+      summary: Создать новый товар
+      description: Добавляет новый товар в каталог
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductInput"
+      responses:
+        201:
+          description: Товар успешно создан
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+        400:
+          description: Не все обязательные поля заполнены
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/products/{id}:
+    get:
+      tags:
+        - Products
+      summary: Получить товар по ID
+      description: Возвращает данные конкретного товара
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: ID товара
+      responses:
+        200:
+          description: Данные товара
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+        404:
+          description: Товар не найден
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+    put:
+      tags:
+        - Products
+      summary: Полное обновление товара
+      description: Заменяет все поля товара новыми данными
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: ID товара
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductInput"
+      responses:
+        200:
+          description: Товар успешно обновлен
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+        400:
+          description: Не все обязательные поля заполнены
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        404:
+          description: Товар не найден
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+    delete:
+      tags:
+        - Products
+      summary: Удалить товар
+      description: Удаляет товар из каталога
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: ID товара
+      responses:
+        204:
+          description: Товар успешно удален (нет содержимого в ответе)
+        404:
+          description: Товар не найден
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
