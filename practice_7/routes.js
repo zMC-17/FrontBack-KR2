@@ -2,19 +2,19 @@
 const express = require('express')
 const router = express.Router()
 const { nanoid } = require("nanoid");
-const jwt = require("jsonwebtoken")
-const { findUserOr404,
+const {
+    findUserOr404,
     findProductOr404,
     hashPassword,
     verifyPassword,
-    users,
-    products,
-    findProductIndexOr404
+    findProductIndexOr404,
+    generateAccessToken,
+    generateRefreshToken
 } = require('./utils');
+const { users, products, refreshTokens } = require('./database')
 const { authMiddleware } = require("./middleware")
 
-const JWT_SECRET = "jwt-secret"
-const ACCESS_EXPIRES_IN = '15m'
+
 
 
 // --- ПОЛЬЗОВАТЕЛЬ ---
@@ -46,21 +46,15 @@ router.post("/auth/login", async (req, res) => {
     const user = findUserOr404(username, res);
     if (!user) return;
 
-    const isAuthenticated = await verifyPassword(password,
-        user.hashedPassword);
+    const isAuthenticated = await verifyPassword(password, user.hashedPassword);
     if (isAuthenticated) {
         // JWT
-        const access_token = jwt.sign(
-            {
-                sub: user.id,
-                username: user.username
-            },
-            JWT_SECRET,
-            {
-                expiresIn: ACCESS_EXPIRES_IN,
-            }
-        );
-        res.status(200).json({ access_token });
+        const access_token = generateAccessToken(user);
+        const refresh_token = generateAccessToken(user);
+
+        refreshTokens.add(refreshTokens);
+
+        res.status(200).json({ "accessToken": access_token, "refreshToken": refresh_token });
     }
     else {
         res.status(401).json({ error: "not authentethicated" })
@@ -81,6 +75,43 @@ router.get("/api/auth/me", authMiddleware, (req, res) => {
         id: user.id,
         username: user.username,
     });
+});
+
+router.post("/api/auth/refresh", (req, res) => {
+    const { refreshToken } = req.body;
+    if (!refreshToken) {
+        return res.status(400).json({
+            error: "refreshToken is required",
+        });
+    }
+    if (!refreshTokens.has(refreshToken)) {
+        return res.status(401).json({
+            error: "Invalid refresh token",
+        });
+    }
+    try {
+        const payload = jwt.verify(refreshToken, REFRESH_SECRET);
+        const user = users.find((u) => u.id === payload.sub);
+        if (!user) {
+            return res.status(401).json({
+                error: "User not found",
+            });
+        }
+        // Ротация refresh-токена:
+        // старый удаляем, новый создаём
+        refreshTokens.delete(refreshToken);
+        const newAccessToken = generateAccessToken(user);
+        const newRefreshToken = generateRefreshToken(user);
+        refreshTokens.add(newRefreshToken);
+        res.json({
+            accessToken: newAccessToken,
+            refreshToken: newRefreshToken,
+        });
+    } catch (err) {
+        return res.status(401).json({
+            error: "Invalid or expired refresh token",
+        });
+    }
 });
 
 // --- ТОВАРЫ ---

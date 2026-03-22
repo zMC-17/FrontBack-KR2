@@ -1,6 +1,11 @@
 // --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
 const bcrypt = require("bcrypt");
+const jwt = require('jsonwebtoken')
 const { users, products } = require('./database.js');
+
+const JWT_SECRET = "jwt-secret"
+const ACCESS_EXPIRES_IN = '15m'
+const REFRESH_EXPIRES_IN = '7d'
 
 // Проверка в бд
 function findUserOr404(username, res) {
@@ -19,7 +24,6 @@ function findProductOr404(id, res) {
     }
     return product;
 }
-
 function findProductIndexOr404(id, res) {
     const index = products.findIndex(p => p.id == id);
     if (index === -1) {
@@ -38,12 +42,39 @@ async function verifyPassword(password, passwordHash) {
     return bcrypt.compare(password, passwordHash);
 }
 
+// Создание токенов
+function generateAccessToken(user) {
+    return jwt.sign(
+        {
+            sub: user.id,
+            username: user.username,
+        },
+        ACCESS_SECRET,
+        {
+            expiresIn: ACCESS_EXPIRES_IN,
+        }
+    );
+}
+
+function generateRefreshToken(user) {
+    return jwt.sign(
+        {
+            sub: user.id,
+            username: user.username,
+        },
+        REFRESH_SECRET,
+        {
+            expiresIn: REFRESH_EXPIRES_IN,
+        }
+    );
+}
+
 module.exports = {
     findProductOr404,
     findUserOr404,
     findProductIndexOr404,
     hashPassword,
     verifyPassword,
-    users,
-    products
+    generateAccessToken,
+    generateRefreshToken
 }

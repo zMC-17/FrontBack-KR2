@@ -18,7 +18,10 @@ let products = [
     }
 ];
 
+let refreshTokens = new Set();
+
 module.exports = {
     users,
-    products
+    products,
+    refreshTokens
 }
