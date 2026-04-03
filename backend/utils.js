@@ -3,7 +3,8 @@ const bcrypt = require("bcrypt");
 const jwt = require('jsonwebtoken')
 const { users, products } = require('./database.js');
 
-const JWT_SECRET = "jwt-secret"
+const ACCESS_SECRET = "jwt-secret"
+const REFRESH_SECRET = "jwt-secret"
 const ACCESS_EXPIRES_IN = '15m'
 const REFRESH_EXPIRES_IN = '7d'
 

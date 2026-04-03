@@ -18,8 +18,15 @@ tags:
     description: Управление товарами
 
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: "JWT токен, полученный при логине (accessToken)"
+
   schemas:
-    # Схема пользователя (регистрация)
+    # Схема пользователя (ответ)
     User:
       type: object
       properties:
@@ -27,19 +34,30 @@ components:
           type: string
           example: "abc123"
           description: Уникальный ID пользователя
-        email:
+        username:
           type: string
-          format: email
           example: "user@example.com"
-          description: Email пользователя
+          description: Email пользователя (используется как username)
+      example:
+        id: "abc123"
+        username: "user@example.com"
+
+    # Схема пользователя (регистрация, полная)
+    UserFull:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "abc123"
+        username:
+          type: string
+          example: "user@example.com"
         first_name:
           type: string
           example: "Иван"
-          description: Имя пользователя
         last_name:
           type: string
           example: "Иванов"
-          description: Фамилия пользователя
         hashedPassword:
           type: string
           example: "$2b$10$..."
@@ -58,20 +76,17 @@ components:
           type: string
           format: email
           example: "user@example.com"
-          description: Email пользователя
+          description: Email пользователя (будет использован как username)
         first_name:
           type: string
           example: "Иван"
-          description: Имя пользователя
         last_name:
           type: string
           example: "Иванов"
-          description: Фамилия пользователя
         password:
           type: string
           format: password
           example: "qwerty123"
-          description: Пароль пользователя
       example:
         email: "user@example.com"
         first_name: "Иван"
@@ -93,19 +108,48 @@ components:
           type: string
           format: password
           example: "qwerty123"
-          description: Пароль пользователя
       example:
         username: "user@example.com"
         password: "qwerty123"
 
-    # Схема успешного входа
+    # Схема успешного входа (с токенами)
     LoginResponse:
       type: object
       properties:
-        login:
-          type: boolean
-          example: true
-          description: Статус аутентификации
+        accessToken:
+          type: string
+          description: JWT access token (используется для Bearer авторизации)
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        refreshToken:
+          type: string
+          description: JWT refresh token (используется для обновления пары токенов)
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+    # Схема для запроса обновления токенов
+    RefreshTokenRequest:
+      type: object
+      required:
+        - refreshToken
+      properties:
+        refreshToken:
+          type: string
+          description: Действующий refresh token
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+      example:
+        refreshToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+    # Схема ответа при обновлении токенов
+    RefreshTokenResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+          description: Новый access token
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        refreshToken:
+          type: string
+          description: Новый refresh token
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 
     # Схема товара
     Product:
@@ -114,23 +158,18 @@ components:
         id:
           type: string
           example: "xyz789"
-          description: Уникальный ID товара
         title:
           type: string
           example: "Ноутбук"
-          description: Название товара
         category:
           type: string
           example: "Электроника"
-          description: Категория товара
         description:
           type: string
           example: "Мощный ноутбук для работы и игр"
-          description: Описание товара
         price:
           type: number
           example: 50000
-          description: Цена товара
       example:
         id: "xyz789"
         title: "Ноутбук"
@@ -143,24 +182,22 @@ components:
       type: object
       required:
         - title
+        - category
+        - description
         - price
       properties:
         title:
           type: string
           example: "Ноутбук"
-          description: Название товара
         category:
           type: string
           example: "Электроника"
-          description: Категория товара
         description:
           type: string
           example: "Мощный ноутбук для работы и игр"
-          description: Описание товара
         price:
           type: number
           example: 50000
-          description: Цена товара
       example:
         title: "Ноутбук"
         category: "Электроника"
@@ -179,7 +216,7 @@ components:
 
 paths:
   # --- АУТЕНТИФИКАЦИЯ ---
-  /api/auth/register:
+  /auth/register:
     post:
       tags:
         - Auth
@@ -197,7 +234,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/User"
+                $ref: "#/components/schemas/UserFull"
         400:
           description: Не все обязательные поля заполнены
           content:
@@ -205,12 +242,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
-  /api/auth/login:
+  /auth/login:
     post:
       tags:
         - Auth
       summary: Вход в систему
-      description: Аутентификация пользователя по username и password
+      description: Аутентификация пользователя по username и password. Возвращает access и refresh токены.
       requestBody:
         required: true
         content:
@@ -243,13 +280,75 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /api/auth/me:
+    get:
+      tags:
+        - Auth
+      summary: Получить информацию о текущем пользователе
+      description: Возвращает данные аутентифицированного пользователя (без пароля).
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: Данные пользователя
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        401:
+          description: Не авторизован (отсутствует или неверный токен)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        404:
+          description: Пользователь не найден
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/auth/refresh:
+    post:
+      tags:
+        - Auth
+      summary: Обновить токены
+      description: Принимает refresh token, возвращает новую пару access и refresh токенов (ротация).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshTokenRequest"
+      responses:
+        200:
+          description: Новая пара токенов
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RefreshTokenResponse"
+        400:
+          description: refreshToken не указан
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        401:
+          description: Неверный или истекший refresh token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   # --- ТОВАРЫ ---
-  /api/products:
+  /products:
     get:
       tags:
         - Products
       summary: Получить список всех товаров
-      description: Возвращает массив всех товаров
+      description: Возвращает массив всех товаров. Требует авторизации.
+      security:
+        - bearerAuth: []
       responses:
         200:
           description: Успешный ответ
@@ -259,12 +358,18 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Product"
+        401:
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 
     post:
       tags:
         - Products
       summary: Создать новый товар
-      description: Добавляет новый товар в каталог
+      description: Добавляет новый товар в каталог. Авторизация не требуется (согласно вашему коду).
       requestBody:
         required: true
         content:
@@ -285,12 +390,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
-  /api/products/{id}:
+  /products/{id}:
     get:
       tags:
         - Products
       summary: Получить товар по ID
-      description: Возвращает данные конкретного товара
+      description: Возвращает данные конкретного товара. Авторизация не требуется.
       parameters:
         - in: path
           name: id
@@ -316,7 +421,9 @@ paths:
       tags:
         - Products
       summary: Полное обновление товара
-      description: Заменяет все поля товара новыми данными
+      description: Заменяет все поля товара новыми данными. Требует авторизации.
+      security:
+        - bearerAuth: []
       parameters:
         - in: path
           name: id
@@ -343,6 +450,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        401:
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         404:
           description: Товар не найден
           content:
@@ -354,7 +467,9 @@ paths:
       tags:
         - Products
       summary: Удалить товар
-      description: Удаляет товар из каталога
+      description: Удаляет товар из каталога. Требует авторизации.
+      security:
+        - bearerAuth: []
       parameters:
         - in: path
           name: id
@@ -365,6 +480,12 @@ paths:
       responses:
         204:
           description: Товар успешно удален (нет содержимого в ответе)
+        401:
+          description: Не авторизован
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         404:
           description: Товар не найден
           content:

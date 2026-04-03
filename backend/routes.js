@@ -13,6 +13,9 @@ const {
 } = require('./utils');
 const { users, products, refreshTokens } = require('./database')
 const { authMiddleware } = require("./middleware")
+const jwt = require('jsonwebtoken')
+
+const REFRESH_SECRET = 'your-refresh-secret';
 
 
 
@@ -50,9 +53,9 @@ router.post("/auth/login", async (req, res) => {
     if (isAuthenticated) {
         // JWT
         const access_token = generateAccessToken(user);
-        const refresh_token = generateAccessToken(user);
+        const refresh_token = generateRefreshToken(user);
 
-        refreshTokens.add(refreshTokens);
+        refreshTokens.add(refresh_token);
 
         res.status(200).json({ "accessToken": access_token, "refreshToken": refresh_token });
     }

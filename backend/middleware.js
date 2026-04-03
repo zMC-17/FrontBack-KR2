@@ -1,5 +1,7 @@
 const jwt = require('jsonwebtoken')
 
+const JWT_SECRET = 'your-jwt-secret';
+
 function authMiddleware(req, res, next) {
     const header = req.headers.authorization || "";
     // Ожидаем формат: Bearer <token>
@@ -21,4 +23,4 @@ function authMiddleware(req, res, next) {
     }
 }
 
-module.exports = authMiddleware
+module.exports = {authMiddleware}
